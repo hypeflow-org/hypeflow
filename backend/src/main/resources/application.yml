@@ -6,3 +6,18 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+# External API configurations
+hypeflow:
+  newsapi:
+    api-key: ${HYPEFLOW_NEWSAPI_API_KEY:}
+    language: en
+  wikipedia:
+    project: en.wikipedia.org
+    access: all-access
+    agent: all-agents
+    user-agent: HypeFlow/1.0 (https://github.com/hypeflow-org/hypeflow/)
+  reddit:
+    client-id: ${HYPEFLOW_REDDIT_CLIENT_ID:}
+    client-secret: ${HYPEFLOW_REDDIT_CLIENT_SECRET:}
+    user-agent: HypeFlow/0.1 (by u/${HYPEFLOW_REDDIT_USERNAME:your_reddit_username})
