@@ -11,10 +11,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -85,7 +83,7 @@ public class RedditSourceClient implements SourceClient {
         boolean reachedStartDate = false;
 
         while (page < MAX_PAGES && !reachedStartDate) {
-            HttpUrl.Builder urlBuilder = HttpUrl.parse(BASE_URL).newBuilder()
+            HttpUrl.Builder urlBuilder = Objects.requireNonNull(HttpUrl.parse(BASE_URL)).newBuilder()
                     .addQueryParameter("q", topic)
                     .addQueryParameter("sort", "new")
                     .addQueryParameter("limit", String.valueOf(PAGE_SIZE))
