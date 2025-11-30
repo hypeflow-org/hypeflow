@@ -62,145 +62,70 @@ Roll-up: series can be returned per source or sum across sources.
 
 ---
 
-## API (draft)
-```
-POST   /api/topics
-GET    /api/topics
-DELETE /api/topics/{id}
 
-POST   /api/topic-queries           # create source-specific query under a topic
-GET    /api/topic-queries?topicId=…
-PATCH  /api/topic-queries/{id}      # enable/disable/update raw query/metadata
-DELETE /api/topic-queries/{id}
+## What it does right now
+- Single backend in `backend/` (Java + Spring Boot).
+- `/api/timeseries` endpoint: takes a word and date range, queries enabled sources, aggregates counts per UTC day, sums them, and returns JSON.
+- No UI bundled yet; you can hit the API directly or wire your own chart.
 
-GET    /api/series?topicId=…&window=1h|3h|24h&rollup=all|bySource
-GET    /api/rankings?window=1h|3h|24h
-GET    /api/health
-GET    /api/metrics   (secured)
-```
 
-*Series response (rollup=all)*
+## Sources (current)
+- `wikipedia` — Wikimedia Pageviews API (per-article, daily).
+- `newsapi` — NewsAPI `/v2/everything`, limited pages → approximate, skewed to recent articles.
+- `reddit` — Code exists but **disabled by default**; requires official Reddit API access and your own credentials. Only aggregates public `/search?sort=new&type=link` results by `created_utc`, up to ~1000 newest posts per query.
+  We do not scrape. We only keep aggregated counts (date + integer), no raw content or PII.
+
+---
+
+## API: POST `/api/timeseries`
+Request:
 ```json
 {
-  "topicId": "t_42",
-  "rollup": "all",
-  "bucketGranularity": "minute",
-  "buckets": [
-    {"startUtc": "2025-11-04T12:00:00Z", "endUtc": "2025-11-04T12:01:00Z", "count": 45}
-  ],
-  "quality": {"partialBuckets": ["2025-11-04T12:59:00Z"]}
+  "word": "bitcoin",
+  "startDate": "2025-11-01",
+  "endDate": "2025-11-07",
+  "sources": ["wikipedia", "newsapi"]
 }
 ```
-*Series response (rollup=bySource)*
-```
+
+Response:
+```json
 {
-  "topicId": "t_42",
-  "rollup": "bySource",
-  "series": [
-    {
-      "topicQueryId": "q_wiki",
-      "source": "wiki-pageviews",
-      "bucketGranularity": "hour",
-      "buckets": [ { "startUtc": "...", "endUtc": "...", "count": 18 } ]
-    },
-    {
-      "topicQueryId": "q_news",
-      "source": "news-coverage",
-      "bucketGranularity": "hour",
-      "buckets": [ { "startUtc": "...", "endUtc": "...", "count": 27 } ]
-    }
-  ]
+  "startDate": "2025-11-01",
+  "endDate": "2025-11-07",
+  "totalMentions": 42,
+  "dailyStatistics": [
+    {"date": "2025-11-01", "mentions": 3},
+    {"date": "2025-11-02", "mentions": 0}
+  ],
+  "sources": ["wikipedia", "newsapi"],
+  "fromCache": false
 }
 ```
 
 ---
 
-**Database (draft schema)**
-```
-topics(
-  id                uuid primary key,
-  display_name      text not null,
-  created_at        timestamptz not null default now()
-)
-
-topic_queries(
-  id                uuid primary key,
-  topic_id          uuid not null references topics(id) on delete cascade,
-  source            text not null,          -- e.g., "x-counts", "wiki-pageviews"
-  raw_query         text not null,          -- exact string sent to the source
-  query_metadata    jsonb not null default '{}'::jsonb,  -- versioned knobs
-  active            boolean not null default true,
-  created_at        timestamptz not null default now()
-)
--- index for fetches within a time range per topic:
--- create index on topic_queries(topic_id, source);
-
-counts(
-  id                bigserial primary key,
-  topic_query_id    uuid not null references topic_queries(id) on delete cascade,
-  bucket_start_utc  timestamptz not null,
-  bucket_end_utc    timestamptz not null,
-  count             int not null check (count >= 0),
-  quality           smallint not null default 0,  -- bit flags: partial, delayed, backfill
-  unique(topic_query_id, bucket_start_utc, bucket_end_utc)
-)
--- create index on counts(topic_query_id, bucket_start_utc);
-
-anomalies(
-  id                bigserial primary key,
-  topic_id          uuid not null references topics(id) on delete cascade,
-  topic_query_id    uuid,                    -- optional, for per-source diagnostics
-  window            text not null,           -- '1h' | '3h' | '24h'
-  method            text not null,           -- 'zscore'
-  bucket_start_utc  timestamptz not null,
-  score             double precision not null,
-  threshold         double precision not null,
-  is_hype           boolean not null
-)
+## Run locally (backend)
+From `backend/`:
+```bash
+./mvnw spring-boot:run
 ```
 
+Environment variables (see `backend/.env.example`, you can copy to `backend/.env`):
+```bash
+# NewsAPI
+HYPEFLOW_NEWSAPI_API_KEY=your_newsapi_key_here
+# Reddit (only if you have approved access)
+HYPEFLOW_REDDIT_CLIENT_ID=your_reddit_client_id_here
+HYPEFLOW_REDDIT_CLIENT_SECRET=your_reddit_client_secret_here
+HYPEFLOW_REDDIT_USERNAME=your_reddit_username
+```
+
+`application.yml` maps them under `hypeflow.newsapi` and `hypeflow.reddit`. If Reddit vars are missing or you don’t have approved access, keep that source disabled.
+
+Prereqs: JDK 17+, network access to external APIs; no database needed for this MVP.
 ---
-
-**Local Development**
-
-# one-time
-```sh
-cp infra/example.env infra/.env
-```
-
-# start db
-```sh
-docker compose -f infra/docker-compose.yml up -d
-```
-
-# backend
-```sh
-./gradlew :api:bootRun       # API (exposes /actuator/health)
-./gradlew :collector:run     # Scheduler
-./gradlew :analyzer:run      # Analyzer
-```
-
-# frontend
-```sh
-cd web
-npm i
-npm run dev
-```
-
-Environment variables (sample):
-```
-DB_URL=jdbc:postgresql://localhost:5432/hypeflow
-DB_USER=hypeflow
-DB_PASS=hypeflow
-ADAPTER_A_KEY=...
-ADAPTER_B_KEY=...
-```
-
----
-
-**Security & Privacy**
--	Only aggregated counts are stored; no PII, no raw posts/articles are persisted.
--	Secrets via environment variables; never commit keys.
--	All timestamps at rest are UTC; UI renders in the user’s local time.
-
-
+## Notes on limits and legality
+- NewsAPI: bounded pages; results are approximate for wide ranges. Respect their Terms and provide your own key.
+- Reddit: presence of code != permission. Use only with explicit, compliant access per Reddit policies; otherwise leave it off.
+- Wikipedia: public stats API; still be nice to their rate limits.
