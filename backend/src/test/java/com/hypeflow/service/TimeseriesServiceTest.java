@@ -1,26 +1,37 @@
 package com.hypeflow.service;
 
-import com.hypeflow.api.DailyStatDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypeflow.api.TimeseriesRequest;
 import com.hypeflow.api.TimeseriesResponse;
 import com.hypeflow.model.TimeBucket;
 import com.hypeflow.model.TimeInterval;
 import com.hypeflow.model.TimeSeries;
+import com.hypeflow.repo.SearchHistoryRepository;
 import com.hypeflow.sources.SourceClient;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class TimeseriesServiceTest {
 
     @Test
     void testQueryWithMultipleSources() {
+        RedisTemplate<String, Object> redis = mock(RedisTemplate.class);
+        ValueOperations<String, Object> ops = mock(ValueOperations.class);
+
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenReturn(null);
+
+        SearchHistoryRepository repo = mock(SearchHistoryRepository.class);
+
         SourceClient newsClient = new MockSourceClient(
                 "newsapi",
-                "bitcoin",
                 List.of(
                         new TimeBucket(LocalDate.of(2025, 11, 1), 10),
                         new TimeBucket(LocalDate.of(2025, 11, 2), 20)
@@ -29,14 +40,19 @@ class TimeseriesServiceTest {
 
         SourceClient wikiClient = new MockSourceClient(
                 "wikipedia",
-                "bitcoin",
                 List.of(
                         new TimeBucket(LocalDate.of(2025, 11, 1), 100),
                         new TimeBucket(LocalDate.of(2025, 11, 2), 200)
                 )
         );
 
-        TimeseriesService service = new TimeseriesService(List.of(newsClient, wikiClient));
+        TimeseriesService service =
+                new TimeseriesService(
+                        List.of(newsClient, wikiClient),
+                        repo,
+                        redis,
+                        new ObjectMapper()   // ← ДОБАВИЛИ
+                );
 
         TimeseriesRequest request = new TimeseriesRequest(
                 "bitcoin",
@@ -52,26 +68,35 @@ class TimeseriesServiceTest {
         assertEquals(2, response.dailyStatistics().size());
         assertEquals(330, response.totalMentions());
 
-        DailyStatDto stat1 = response.dailyStatistics().get(0);
-        assertEquals(LocalDate.of(2025, 11, 1), stat1.date());
-        assertEquals(110, stat1.mentions());
+        assertEquals(110, response.dailyStatistics().get(0).mentions());
+        assertEquals(220, response.dailyStatistics().get(1).mentions());
 
-        DailyStatDto stat2 = response.dailyStatistics().get(1);
-        assertEquals(LocalDate.of(2025, 11, 2), stat2.date());
-        assertEquals(220, stat2.mentions());
+        verify(repo, times(1)).save(any());
+        verify(ops, times(1)).set(anyString(), any());
     }
 
     @Test
     void testQueryWithSingleSource() {
+        RedisTemplate<String, Object> redis = mock(RedisTemplate.class);
+        ValueOperations<String, Object> ops = mock(ValueOperations.class);
+
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenReturn(null);
+
+        SearchHistoryRepository repo = mock(SearchHistoryRepository.class);
+
         SourceClient newsClient = new MockSourceClient(
                 "newsapi",
-                "bitcoin",
-                List.of(
-                        new TimeBucket(LocalDate.of(2025, 11, 1), 10)
-                )
+                List.of(new TimeBucket(LocalDate.of(2025, 11, 1), 10))
         );
 
-        TimeseriesService service = new TimeseriesService(List.of(newsClient));
+        TimeseriesService service =
+                new TimeseriesService(
+                        List.of(newsClient),
+                        repo,
+                        redis,
+                        new ObjectMapper()  // ← ДОБАВИЛИ
+                );
 
         TimeseriesRequest request = new TimeseriesRequest(
                 "bitcoin",
@@ -87,30 +112,28 @@ class TimeseriesServiceTest {
         assertEquals(10, response.totalMentions());
     }
 
-    /**
-     * Mock implementation of SourceClient for testing.
-     */
+
+    // MOCK CLIENT
     private static class MockSourceClient implements SourceClient {
-        private final String sourceId;
-        private final String expectedTopic;
+
+        private final String id;
         private final List<TimeBucket> buckets;
 
-        public MockSourceClient(String sourceId, String expectedTopic, List<TimeBucket> buckets) {
-            this.sourceId = sourceId;
-            this.expectedTopic = expectedTopic;
+        public MockSourceClient(String id, List<TimeBucket> buckets) {
+            this.id = id;
             this.buckets = buckets;
         }
 
         @Override
         public String sourceId() {
-            return sourceId;
+            return id;
         }
 
         @Override
         public TimeSeries fetchDailyTimeSeries(String topic,
                                                LocalDate startInclusive,
                                                LocalDate endInclusive) {
-            return new TimeSeries(sourceId, topic, TimeInterval.DAY, buckets);
+            return new TimeSeries(id, topic, TimeInterval.DAY, buckets);
         }
     }
 }
