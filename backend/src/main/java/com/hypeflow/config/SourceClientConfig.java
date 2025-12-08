@@ -34,14 +34,6 @@ public class SourceClientConfig {
     }
 
     @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
-        mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        return mapper;
-    }
-
-    @Bean
     public SourceClient newsApiSourceClient(
             OkHttpClient httpClient,
             ObjectMapper objectMapper,
