@@ -1,6 +1,5 @@
 package com.hypeflow.service;
 
-
 import com.hypeflow.model.SearchHistory;
 import com.hypeflow.repo.SearchHistoryRepository;
 import lombok.RequiredArgsConstructor;

@@ -51,7 +51,7 @@ class TimeseriesServiceTest {
                         List.of(newsClient, wikiClient),
                         repo,
                         redis,
-                        new ObjectMapper()   // ← ДОБАВИЛИ
+                        new ObjectMapper()
                 );
 
         TimeseriesRequest request = new TimeseriesRequest(
@@ -95,7 +95,7 @@ class TimeseriesServiceTest {
                         List.of(newsClient),
                         repo,
                         redis,
-                        new ObjectMapper()  // ← ДОБАВИЛИ
+                        new ObjectMapper()
                 );
 
         TimeseriesRequest request = new TimeseriesRequest(
@@ -112,8 +112,6 @@ class TimeseriesServiceTest {
         assertEquals(10, response.totalMentions());
     }
 
-
-    // MOCK CLIENT
     private static class MockSourceClient implements SourceClient {
 
         private final String id;

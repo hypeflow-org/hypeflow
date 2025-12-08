@@ -57,7 +57,6 @@ public class TimeseriesService {
                 String.join("-", requestedSources)
         );
 
-        //  ЧИТАЕМ ИЗ КЭША
         Object raw = redis.opsForValue().get(cacheKey);
         if (raw != null) {
             try {
@@ -126,7 +125,6 @@ public class TimeseriesService {
                 false
         );
 
-        // КЛАДЁМ В РЕДИС
         redis.opsForValue().set(cacheKey, response);
         log.info("Saved result to cache: {}", cacheKey);
 

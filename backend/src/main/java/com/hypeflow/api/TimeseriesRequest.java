@@ -21,9 +21,6 @@ public record TimeseriesRequest(
 
 ) {
     public TimeseriesRequest {
-        if (sources == null) sources = List.of("reddit");
-        // if (granularity == null) granularity = "daily";
-        // Validate date range
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("startDate cannot be after endDate");
         }
