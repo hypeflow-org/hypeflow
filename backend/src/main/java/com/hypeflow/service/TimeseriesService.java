@@ -2,11 +2,14 @@ package com.hypeflow.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypeflow.api.DailyStatDto;
+import com.hypeflow.api.SourceErrorDto;
+import com.hypeflow.api.SourceSeriesDto;
 import com.hypeflow.api.TimeseriesRequest;
 import com.hypeflow.api.TimeseriesResponse;
 import com.hypeflow.model.TimeBucket;
 import com.hypeflow.model.TimeSeries;
 import com.hypeflow.sources.SourceClient;
+import com.hypeflow.sources.SourceClientException;
 import com.hypeflow.model.SearchHistory;
 import com.hypeflow.repo.SearchHistoryRepository;
 
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -62,7 +66,19 @@ public class TimeseriesService {
             try {
                 TimeseriesResponse cached = objectMapper.convertValue(raw, TimeseriesResponse.class);
                 log.info("Cache hit: {}", cacheKey);
-                return cached;
+                List<SourceSeriesDto> perSource = cached.perSource() != null ? cached.perSource() : List.of();
+                List<SourceErrorDto> errors = cached.errors() != null ? cached.errors() : List.of();
+                return new TimeseriesResponse(
+                        cached.word(),
+                        cached.startDate(),
+                        cached.endDate(),
+                        cached.totalMentions(),
+                        cached.dailyStatistics(),
+                        cached.sources(),
+                        true,
+                        perSource,
+                        errors
+                );
             } catch (Exception e) {
                 log.error("Failed to convert cached value: {}", e.getMessage());
             }
@@ -72,21 +88,58 @@ public class TimeseriesService {
 
         Map<LocalDate, Integer> aggregatedCounts = new HashMap<>();
         List<String> actualSources = new ArrayList<>();
+        List<SourceSeriesDto> perSourceList = new ArrayList<>();
+        List<SourceErrorDto> errorsList = new ArrayList<>();
 
         for (String sourceId : requestedSources) {
             SourceClient client = sourceClientsMap.get(sourceId);
-            if (client == null) continue;
+            if (client == null) {
+                errorsList.add(new SourceErrorDto(
+                        sourceId,
+                        "UNKNOWN_SOURCE",
+                        "Source '" + sourceId + "' is not available"
+                ));
+                continue;
+            }
 
-            actualSources.add(sourceId);
+            try {
+                TimeSeries timeSeries = client.fetchDailyTimeSeries(
+                        req.word(),
+                        req.startDate(),
+                        req.endDate()
+                );
 
-            TimeSeries timeSeries = client.fetchDailyTimeSeries(
-                    req.word(),
-                    req.startDate(),
-                    req.endDate()
-            );
+                actualSources.add(sourceId);
 
-            for (TimeBucket bucket : timeSeries.buckets()) {
-                aggregatedCounts.merge(bucket.date(), bucket.count(), Integer::sum);
+                List<DailyStatDto> sourceDailyStats = new ArrayList<>();
+                int sourceTotalMentions = 0;
+
+                for (TimeBucket bucket : timeSeries.buckets()) {
+                    aggregatedCounts.merge(bucket.date(), bucket.count(), Integer::sum);
+                    sourceDailyStats.add(new DailyStatDto(bucket.date(), bucket.count()));
+                    sourceTotalMentions += bucket.count();
+                }
+
+                perSourceList.add(new SourceSeriesDto(
+                        sourceId,
+                        sourceTotalMentions,
+                        sourceDailyStats
+                ));
+
+            } catch (SourceClientException e) {
+                log.warn("Source {} failed: {}", sourceId, e.getMessage());
+                errorsList.add(new SourceErrorDto(
+                        sourceId,
+                        "SOURCE_ERROR",
+                        e.getMessage()
+                ));
+            } catch (Exception e) {
+                log.error("Unexpected error from source {}: {}", sourceId, e.getMessage());
+                errorsList.add(new SourceErrorDto(
+                        sourceId,
+                        "UNEXPECTED_ERROR",
+                        e.getMessage()
+                ));
             }
         }
 
@@ -122,11 +175,17 @@ public class TimeseriesService {
                 totalMentions,
                 dailyStats,
                 actualSources,
-                false
+                false,
+                perSourceList,
+                errorsList
         );
 
-        redis.opsForValue().set(cacheKey, response);
-        log.info("Saved result to cache: {}", cacheKey);
+        if (errorsList.isEmpty()) {
+            redis.opsForValue().set(cacheKey, response, Duration.ofMinutes(30));
+            log.info("Saved result to cache (TTL 30min): {}", cacheKey);
+        } else {
+            log.info("Not caching response with {} error(s)", errorsList.size());
+        }
 
         return response;
     }

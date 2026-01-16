@@ -31,6 +31,20 @@ hypeflow:
     agent: all-agents
     user-agent: HypeFlow/1.0 (https://github.com/hypeflow-org/hypeflow/)
   reddit:
+    enabled: false
     client-id: ${HYPEFLOW_REDDIT_CLIENT_ID:}
     client-secret: ${HYPEFLOW_REDDIT_CLIENT_SECRET:}
     user-agent: HypeFlow/0.1 (by u/${HYPEFLOW_REDDIT_USERNAME:your_reddit_username})
+  gdelt:
+    enabled: true
+    base-url: https://api.gdeltproject.org/api/v2/doc/doc
+  hackernews:
+    enabled: true
+    base-url: https://hn.algolia.com/api/v1
+  stackexchange:
+    enabled: true
+    base-url: https://api.stackexchange.com
+    site: stackoverflow
+  arxiv:
+    enabled: true
+    base-url: https://export.arxiv.org/api/query
