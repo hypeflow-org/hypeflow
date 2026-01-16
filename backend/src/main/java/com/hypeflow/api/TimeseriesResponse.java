@@ -10,5 +10,7 @@ public record TimeseriesResponse(
         int totalMentions,
         List<DailyStatDto> dailyStatistics,
         List<String> sources,
-        boolean fromCache
+        boolean fromCache,
+        List<SourceSeriesDto> perSource,
+        List<SourceErrorDto> errors
 ) {}
