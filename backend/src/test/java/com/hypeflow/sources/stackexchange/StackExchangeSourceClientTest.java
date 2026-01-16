@@ -20,16 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class StackExchangeSourceClientTest {
 
     private MockWebServer mockWebServer;
-    private OkHttpClient httpClient;
-    private ObjectMapper objectMapper;
     private StackExchangeSourceClient client;
 
     @BeforeEach
     void setUp() throws IOException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
-        httpClient = new OkHttpClient.Builder().build();
-        objectMapper = new ObjectMapper();
+        OkHttpClient httpClient = new OkHttpClient.Builder().build();
+        ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         client = new StackExchangeSourceClient(
                 httpClient, objectMapper, mockWebServer.url("/").toString(), "stackoverflow"
@@ -52,6 +50,7 @@ class StackExchangeSourceClientTest {
 
         RecordedRequest request = mockWebServer.takeRequest();
         String path = request.getPath();
+        assertNotNull(path);
 
         assertTrue(path.contains("search/advanced"));
         assertTrue(path.contains("site=stackoverflow"));

@@ -20,16 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class GdeltSourceClientTest {
 
     private MockWebServer mockWebServer;
-    private OkHttpClient httpClient;
-    private ObjectMapper objectMapper;
     private GdeltSourceClient client;
 
     @BeforeEach
     void setUp() throws IOException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
-        httpClient = new OkHttpClient.Builder().build();
-        objectMapper = new ObjectMapper();
+        OkHttpClient httpClient = new OkHttpClient.Builder().build();
+        ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         client = new GdeltSourceClient(httpClient, objectMapper, mockWebServer.url("/").toString());
     }
@@ -50,6 +48,7 @@ class GdeltSourceClientTest {
 
         RecordedRequest request = mockWebServer.takeRequest();
         String path = request.getPath();
+        assertNotNull(path);
 
         assertTrue(path.contains("query=bitcoin"));
         assertTrue(path.contains("mode=timelinevolraw"));

@@ -20,16 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class HackerNewsSourceClientTest {
 
     private MockWebServer mockWebServer;
-    private OkHttpClient httpClient;
-    private ObjectMapper objectMapper;
     private HackerNewsSourceClient client;
 
     @BeforeEach
     void setUp() throws IOException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
-        httpClient = new OkHttpClient.Builder().build();
-        objectMapper = new ObjectMapper();
+        OkHttpClient httpClient = new OkHttpClient.Builder().build();
+        ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         client = new HackerNewsSourceClient(httpClient, objectMapper, mockWebServer.url("/").toString());
     }
@@ -50,6 +48,7 @@ class HackerNewsSourceClientTest {
 
         RecordedRequest request = mockWebServer.takeRequest();
         String path = request.getPath();
+        assertNotNull(path);
 
         assertTrue(path.contains("search_by_date"));
         assertTrue(path.contains("query=rust"));

@@ -18,7 +18,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class ArxivSourceClientTest {
 
     private MockWebServer mockWebServer;
-    private OkHttpClient httpClient;
     private ArxivSourceClient client;
 
     private static final String SAMPLE_ATOM = """
@@ -40,7 +39,7 @@ class ArxivSourceClientTest {
     void setUp() throws IOException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
-        httpClient = new OkHttpClient.Builder().build();
+        OkHttpClient httpClient = new OkHttpClient.Builder().build();
         client = new ArxivSourceClient(httpClient, mockWebServer.url("/").toString(), 0);
     }
 
@@ -60,6 +59,7 @@ class ArxivSourceClientTest {
 
         RecordedRequest request = mockWebServer.takeRequest();
         String path = request.getPath();
+        assertNotNull(path);
 
         assertTrue(path.contains("search_query=all:machine"));
         assertTrue(path.contains("sortBy=submittedDate"));

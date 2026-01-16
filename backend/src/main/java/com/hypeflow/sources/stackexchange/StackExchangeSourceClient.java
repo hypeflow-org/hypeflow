@@ -51,6 +51,7 @@ public class StackExchangeSourceClient implements SourceClient {
     }
 
     @Override
+    @SuppressWarnings("BusyWait") // Intentional: StackExchange API requires backoff compliance
     public TimeSeries fetchDailyTimeSeries(String topic,
                                            LocalDate startInclusive,
                                            LocalDate endInclusive) {
