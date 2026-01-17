@@ -6,6 +6,7 @@ import com.hypeflow.api.SourceErrorDto;
 import com.hypeflow.api.SourceSeriesDto;
 import com.hypeflow.api.TimeseriesRequest;
 import com.hypeflow.api.TimeseriesResponse;
+import com.hypeflow.config.CacheProperties;
 import com.hypeflow.model.TimeBucket;
 import com.hypeflow.model.TimeSeries;
 import com.hypeflow.sources.SourceClient;
@@ -27,17 +28,21 @@ import java.util.stream.Collectors;
 public class TimeseriesService {
 
     private static final Logger log = LoggerFactory.getLogger(TimeseriesService.class);
+    private static final String CACHE_PREFIX = "timeseries:";
+    private static final String ERROR_CACHE_PREFIX = "timeseries:error:";
 
     private final SearchHistoryRepository searchHistoryRepository;
     private final Map<String, SourceClient> sourceClientsMap;
     private final RedisTemplate<String, Object> redis;
     private final ObjectMapper objectMapper;
+    private final CacheProperties cacheProperties;
 
     public TimeseriesService(
             List<SourceClient> sourceClients,
             SearchHistoryRepository searchHistoryRepository,
             RedisTemplate<String, Object> redis,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            CacheProperties cacheProperties
     ) {
         this.sourceClientsMap = sourceClients.stream()
                 .collect(Collectors.toMap(SourceClient::sourceId, c -> c));
@@ -45,6 +50,7 @@ public class TimeseriesService {
         this.searchHistoryRepository = searchHistoryRepository;
         this.redis = redis;
         this.objectMapper = objectMapper;
+        this.cacheProperties = cacheProperties;
     }
 
     public TimeseriesResponse query(TimeseriesRequest req) {
@@ -53,34 +59,29 @@ public class TimeseriesService {
                 ? new ArrayList<>(sourceClientsMap.keySet())
                 : req.sources();
 
-        String cacheKey = String.format(
-                "timeseries:%s:%s:%s:%s",
-                req.word(),
-                req.startDate(),
-                req.endDate(),
-                String.join("-", requestedSources)
-        );
+        String cacheKey = buildCacheKey(req.word(), req.startDate(), req.endDate(), requestedSources);
+        String errorCacheKey = ERROR_CACHE_PREFIX + cacheKey;
 
+        // Check for cached successful response
         Object raw = redis.opsForValue().get(cacheKey);
         if (raw != null) {
             try {
                 TimeseriesResponse cached = objectMapper.convertValue(raw, TimeseriesResponse.class);
                 log.info("Cache hit: {}", cacheKey);
-                List<SourceSeriesDto> perSource = cached.perSource() != null ? cached.perSource() : List.of();
-                List<SourceErrorDto> errors = cached.errors() != null ? cached.errors() : List.of();
-                return new TimeseriesResponse(
-                        cached.word(),
-                        cached.startDate(),
-                        cached.endDate(),
-                        cached.totalMentions(),
-                        cached.dailyStatistics(),
-                        cached.sources(),
-                        true,
-                        perSource,
-                        errors
-                );
+                return withFromCache(cached, true);
             } catch (Exception e) {
                 log.error("Failed to convert cached value: {}", e.getMessage());
+            }
+        }
+
+        Object errorRaw = redis.opsForValue().get(errorCacheKey);
+        if (errorRaw != null) {
+            try {
+                TimeseriesResponse cachedError = objectMapper.convertValue(errorRaw, TimeseriesResponse.class);
+                log.info("Error cache hit: {}", errorCacheKey);
+                return withFromCache(cachedError, true);
+            } catch (Exception e) {
+                log.error("Failed to convert cached error value: {}", e.getMessage());
             }
         }
 
@@ -181,12 +182,49 @@ public class TimeseriesService {
         );
 
         if (errorsList.isEmpty()) {
-            redis.opsForValue().set(cacheKey, response, Duration.ofMinutes(30));
-            log.info("Saved result to cache (TTL 30min): {}", cacheKey);
+            // Cache successful response with long TTL
+            Duration ttl = Duration.ofHours(cacheProperties.getTimeseriesTtlHours());
+            redis.opsForValue().set(cacheKey, response, ttl);
+            log.info("Saved result to cache (TTL {}h): {}", cacheProperties.getTimeseriesTtlHours(), cacheKey);
+        } else if (!actualSources.isEmpty()) {
+            // Partial success - some sources worked, some failed
+            // Cache with shorter TTL so we retry failed sources sooner
+            Duration ttl = Duration.ofMinutes(cacheProperties.getErrorTtlMinutes());
+            redis.opsForValue().set(errorCacheKey, response, ttl);
+            log.info("Saved partial result to error cache (TTL {}min): {}", cacheProperties.getErrorTtlMinutes(), errorCacheKey);
         } else {
-            log.info("Not caching response with {} error(s)", errorsList.size());
+            // All sources failed - negative caching with short TTL
+            Duration ttl = Duration.ofMinutes(cacheProperties.getErrorTtlMinutes());
+            redis.opsForValue().set(errorCacheKey, response, ttl);
+            log.info("Saved error result to cache (TTL {}min): {}", cacheProperties.getErrorTtlMinutes(), errorCacheKey);
         }
 
         return response;
+    }
+
+    private String buildCacheKey(String word, LocalDate startDate, LocalDate endDate, List<String> sources) {
+        return String.format("%s%s:%s:%s:%s",
+                CACHE_PREFIX,
+                word,
+                startDate,
+                endDate,
+                String.join("-", sources)
+        );
+    }
+
+    private TimeseriesResponse withFromCache(TimeseriesResponse cached, boolean fromCache) {
+        List<SourceSeriesDto> perSource = cached.perSource() != null ? cached.perSource() : List.of();
+        List<SourceErrorDto> errors = cached.errors() != null ? cached.errors() : List.of();
+        return new TimeseriesResponse(
+                cached.word(),
+                cached.startDate(),
+                cached.endDate(),
+                cached.totalMentions(),
+                cached.dailyStatistics(),
+                cached.sources(),
+                fromCache,
+                perSource,
+                errors
+        );
     }
 }

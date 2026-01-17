@@ -48,3 +48,6 @@ hypeflow:
   arxiv:
     enabled: true
     base-url: https://export.arxiv.org/api/query
+  cache:
+    timeseries-ttl-hours: 12
+    error-ttl-minutes: 5
