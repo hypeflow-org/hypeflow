@@ -29,6 +29,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "wikipedia",
                 "Wikipedia",
+                "Daily pageviews of a Wikipedia article (not keyword mentions; depends on article title)",
                 "encyclopedia",
                 "pageviews",
                 null,
@@ -41,6 +42,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "newsapi",
                 "News API",
+                "Daily count of news articles matching the query (requires API key)",
                 "news",
                 "articles",
                 30,
@@ -53,6 +55,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "reddit",
                 "Reddit",
+                "Daily count of Reddit posts matching the query",
                 "social",
                 "posts",
                 null,
@@ -65,6 +68,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "gdelt",
                 "GDELT Project",
+                "Daily count of news articles matching the query (GDELT 2.1 Doc API)",
                 "news",
                 "articles",
                 null,
@@ -77,6 +81,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "hackernews",
                 "Hacker News",
+                "Daily count of Hacker News items matching the query (Algolia search)",
                 "tech",
                 "stories",
                 31,
@@ -89,6 +94,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "stackexchange",
                 "Stack Overflow",
+                "Daily count of StackExchange questions matching the query",
                 "tech",
                 "questions",
                 30,
@@ -101,6 +107,7 @@ public class SourceRegistry {
         register(new SourceDescriptor(
                 "arxiv",
                 "arXiv",
+                "Daily count of arXiv papers matching the query",
                 "academic",
                 "papers",
                 null,

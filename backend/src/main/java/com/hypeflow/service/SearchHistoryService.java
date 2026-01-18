@@ -1,14 +1,14 @@
 package com.hypeflow.service;
 
-
-import com.hypeflow.model.SearchHistory;
+import com.hypeflow.api.PopularWordDto;
+import com.hypeflow.api.SearchHistoryDto;
 
 import java.util.List;
 
 public interface SearchHistoryService {
 
-    List<SearchHistory> getLastSearches(int limit);
+    List<SearchHistoryDto> getLastSearches(int limit);
 
-    List<String> getMostSearchedWords(int limit);
+    List<PopularWordDto> getMostSearchedWords(int limit);
 
 }

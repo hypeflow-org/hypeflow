@@ -1,0 +1,90 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: hypeflow-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeMe}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hypeflow}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-changeMe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - hypeflow-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: hypeflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hypeflow-network
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hypeflow-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-hypeflow}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeMe}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      HYPEFLOW_NEWSAPI_API_KEY: ${HYPEFLOW_NEWSAPI_API_KEY:-}
+      HYPEFLOW_REDDIT_CLIENT_ID: ${HYPEFLOW_REDDIT_CLIENT_ID:-}
+      HYPEFLOW_REDDIT_CLIENT_SECRET: ${HYPEFLOW_REDDIT_CLIENT_SECRET:-}
+      HYPEFLOW_REDDIT_USERNAME: ${HYPEFLOW_REDDIT_USERNAME:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - hypeflow-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hypeflow-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - hypeflow-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  hypeflow-network:
+    driver: bridge
