@@ -42,12 +42,18 @@ public class HealthController {
             healthy = false;
         }
 
-        try (RedisConnection conn = redis.getConnectionFactory().getConnection()) {
-            String pong = conn.ping();
-            response.put("redis", Map.of(
-                    "status", "UP",
-                    "ping", pong
-            ));
+        try {
+            var factory = redis.getConnectionFactory();
+            if (factory == null) {
+                throw new IllegalStateException("Redis connection factory is null");
+            }
+            try (RedisConnection conn = factory.getConnection()) {
+                String pong = conn.ping();
+                response.put("redis", Map.of(
+                        "status", "UP",
+                        "ping", pong != null ? pong : "OK"
+                ));
+            }
         } catch (Exception e) {
             response.put("redis", Map.of(
                     "status", "DOWN",

@@ -70,7 +70,7 @@ public class TimeseriesService {
             try {
                 TimeseriesResponse cached = objectMapper.convertValue(raw, TimeseriesResponse.class);
                 log.info("Cache hit: {}", cacheKey);
-                return withFromCache(cached, true);
+                return withFromCache(cached);
             } catch (Exception e) {
                 log.error("Failed to convert cached value: {}", e.getMessage());
             }
@@ -81,7 +81,7 @@ public class TimeseriesService {
             try {
                 TimeseriesResponse cachedError = objectMapper.convertValue(errorRaw, TimeseriesResponse.class);
                 log.info("Error cache hit: {}", errorCacheKey);
-                return withFromCache(cachedError, true);
+                return withFromCache(cachedError);
             } catch (Exception e) {
                 log.error("Failed to convert cached error value: {}", e.getMessage());
             }
@@ -204,7 +204,7 @@ public class TimeseriesService {
         return String.format("%s:%s:%s:%s", word, startDate, endDate, String.join("-", sources));
     }
 
-    private TimeseriesResponse withFromCache(TimeseriesResponse cached, boolean fromCache) {
+    private TimeseriesResponse withFromCache(TimeseriesResponse cached) {
         List<SourceSeriesDto> perSource = cached.perSource() != null ? cached.perSource() : List.of();
         List<SourceErrorDto> errors = cached.errors() != null ? cached.errors() : List.of();
         return new TimeseriesResponse(
@@ -214,7 +214,7 @@ public class TimeseriesService {
                 cached.totalMentions(),
                 cached.dailyStatistics(),
                 cached.sources(),
-                fromCache,
+                true,
                 perSource,
                 errors
         );
