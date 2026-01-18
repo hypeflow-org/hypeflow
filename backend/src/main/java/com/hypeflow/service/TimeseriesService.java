@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 public class TimeseriesService {
 
     private static final Logger log = LoggerFactory.getLogger(TimeseriesService.class);
-    private static final String CACHE_PREFIX = "timeseries:";
-    private static final String ERROR_CACHE_PREFIX = "timeseries:error:";
+    private static final String CACHE_PREFIX = "ts:";
+    private static final String ERROR_CACHE_PREFIX = "ts:err:";
 
     private final SearchHistoryRepository searchHistoryRepository;
     private final Map<String, SourceClient> sourceClientsMap;
@@ -57,12 +57,14 @@ public class TimeseriesService {
 
         List<String> requestedSources = req.sources() == null || req.sources().isEmpty()
                 ? new ArrayList<>(sourceClientsMap.keySet())
-                : req.sources();
+                : new ArrayList<>(req.sources());
+        requestedSources.sort(String::compareTo);
 
-        String cacheKey = buildCacheKey(req.word(), req.startDate(), req.endDate(), requestedSources);
-        String errorCacheKey = ERROR_CACHE_PREFIX + cacheKey;
+        String normalizedWord = req.word().trim();
+        String baseKey = buildBaseKey(normalizedWord, req.startDate(), req.endDate(), requestedSources);
+        String cacheKey = CACHE_PREFIX + baseKey;
+        String errorCacheKey = ERROR_CACHE_PREFIX + baseKey;
 
-        // Check for cached successful response
         Object raw = redis.opsForValue().get(cacheKey);
         if (raw != null) {
             try {
@@ -182,18 +184,14 @@ public class TimeseriesService {
         );
 
         if (errorsList.isEmpty()) {
-            // Cache successful response with long TTL
             Duration ttl = Duration.ofHours(cacheProperties.getTimeseriesTtlHours());
             redis.opsForValue().set(cacheKey, response, ttl);
             log.info("Saved result to cache (TTL {}h): {}", cacheProperties.getTimeseriesTtlHours(), cacheKey);
         } else if (!actualSources.isEmpty()) {
-            // Partial success - some sources worked, some failed
-            // Cache with shorter TTL so we retry failed sources sooner
             Duration ttl = Duration.ofMinutes(cacheProperties.getErrorTtlMinutes());
             redis.opsForValue().set(errorCacheKey, response, ttl);
             log.info("Saved partial result to error cache (TTL {}min): {}", cacheProperties.getErrorTtlMinutes(), errorCacheKey);
         } else {
-            // All sources failed - negative caching with short TTL
             Duration ttl = Duration.ofMinutes(cacheProperties.getErrorTtlMinutes());
             redis.opsForValue().set(errorCacheKey, response, ttl);
             log.info("Saved error result to cache (TTL {}min): {}", cacheProperties.getErrorTtlMinutes(), errorCacheKey);
@@ -202,14 +200,8 @@ public class TimeseriesService {
         return response;
     }
 
-    private String buildCacheKey(String word, LocalDate startDate, LocalDate endDate, List<String> sources) {
-        return String.format("%s%s:%s:%s:%s",
-                CACHE_PREFIX,
-                word,
-                startDate,
-                endDate,
-                String.join("-", sources)
-        );
+    private String buildBaseKey(String word, LocalDate startDate, LocalDate endDate, List<String> sources) {
+        return String.format("%s:%s:%s:%s", word, startDate, endDate, String.join("-", sources));
     }
 
     private TimeseriesResponse withFromCache(TimeseriesResponse cached, boolean fromCache) {

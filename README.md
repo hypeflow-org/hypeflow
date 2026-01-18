@@ -12,7 +12,7 @@
 - [Docker](https://docs.docker.com/get-docker/) (with Docker Compose)
 - Git
 
-### One-Command Startup
+### Quick Start
 
 ```bash
 # Clone the repository
@@ -41,7 +41,7 @@ docker compose up -d --build
 curl http://localhost:8080/api/health
 ```
 
-**Search for mentions of "bitcoin" (last 7 days):**
+**Search for mentions of "bitcoin" (7 days):**
 ```bash
 curl -X POST http://localhost:8080/api/timeseries \
   -H "Content-Type: application/json" \
@@ -104,6 +104,22 @@ docker compose logs -f backend
 ```
 
 ---
+### Clear cache
+```bash
+docker exec -it hypeflow-redis redis-cli --scan --pattern "ts:*" | xargs -r docker exec -i hypeflow-redis redis-cli DEL
+docker exec -it hypeflow-redis redis-cli --scan --pattern "ts:err:*" | xargs -r docker exec -i hypeflow-redis redis-cli DEL
+docker exec -it hypeflow-redis redis-cli --scan --pattern "ratelimit:*" | xargs -r docker exec -i hypeflow-redis redis-cli DEL
+```
+or use `FLUSHALL`. 
+```bash
+docker exec hypeflow-redis redis-cli FLUSHALL
+```
+Be aware: `By default, FLUSHALL will synchronously flush all the databases`
+
+### Run only mysql & redis (to run backend locally)
+```bash
+docker compose up -d mysql redis
+```
 
 ## Repository
 
@@ -114,7 +130,9 @@ docker compose logs -f backend
 ## What HypeFlow Is
 
 HypeFlow collects **aggregated mention counts** for user-defined topics (keywords/hashtags/queries).
-It stores time-bucketed counts, computes a baseline, and flags **spikes** ("hype events"). A small web app lets users add topics, view charts for 1h / 3h / 24h windows, and export data.
+HypeFlow aggregates daily mention counts for a keyword across multiple public sources (e.g., Wikipedia Pageviews, GDELT, HackerNews, arXiv). The backend exposes a simple API for timeseries queries and search history. Caching and rate limiting are enabled by default.
+
+Spike detection and subscriptions are planned for later milestones.
 
 For Semester 1 we only ingest sources that return time-bucketed counts out of the box (no local parsing/PII). If a source exposes only raw items, it's out of scope for S1.
 
@@ -122,12 +140,12 @@ For Semester 1 we only ingest sources that return time-bucketed counts out of th
 
 ## Data Sources & Legality
 
-HypeFlow uses a Source Adapter layer. Each adapter must return pre-aggregated, time-bucketed counts (minute/hour/day) for a given query or entity. No scraping. No PII.
+HypeFlow uses a Source Adapter layer. Each adapter currently supports pre-aggregated, time-bucketed counts for a given query or entity. No scraping. No PII.
 	-	Examples suitable for S1 (non-exclusive):
 	-	social/activity platforms that expose counts endpoints for queries/hashtags;
 	-	open media datasets with bucketed coverage counts per query/entity;
-	-	knowledge platforms with page-view or mention counters.
-	-	BYO-key (bring-your-own API key) is supported per user and per source.
+	-	knowledge platforms with page-view or mention counters;
+	-	BYO-key (bring-your-own API key) via .env (project-level) for now. Users and sources in the future.
 
 Each adapter doc includes: query syntax, bucket granularity & timezone, rate limits, auth flow, ToS notes, typical latency, deprecation risks.
 
@@ -164,11 +182,11 @@ Each adapter doc includes: query syntax, bucket granularity & timezone, rate lim
 
 ## Technology Choices (what & why)
 
-- **Java 17 + Spring Boot** — reliable REST, scheduling, tests, Micrometer/Actuator; team familiarity.
+- **Java 17 + Spring Boot** — REST API for timeseries + search history, scheduling, tests, Micrometer/Actuator;
 - **MySQL** — solid SQL for search history persistence.
 - **Redis** — caching for API responses and rate limiting.
 - **Vue.js + Chart.js** — lightweight UI stack for interactive charts.
-- **Docker Compose** — one-command startup, reproducible local environment.
+- **Docker Compose** — Quick Start, reproducible local environment.
 - **Source Adapters** — clean separation per provider; allows BYO API keys without changing core logic.
 - **Rate Limiting** — Redis-backed, 30 requests/minute per IP.
 

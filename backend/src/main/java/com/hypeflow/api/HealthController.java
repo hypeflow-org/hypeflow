@@ -1,5 +1,6 @@
 package com.hypeflow.api;
 
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +29,6 @@ public class HealthController {
         Map<String, Object> response = new HashMap<>();
         boolean healthy = true;
 
-        // Check MySQL
         try (Connection conn = dataSource.getConnection()) {
             response.put("mysql", Map.of(
                     "status", "UP",
@@ -42,9 +42,8 @@ public class HealthController {
             healthy = false;
         }
 
-        // Check Redis
-        try {
-            String pong = redis.getConnectionFactory().getConnection().ping();
+        try (RedisConnection conn = redis.getConnectionFactory().getConnection()) {
+            String pong = conn.ping();
             response.put("redis", Map.of(
                     "status", "UP",
                     "ping", pong

@@ -38,7 +38,10 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
 
     private SearchHistoryDto toDto(SearchHistory entity) {
         List<String> sourcesList = entity.getSources() != null && !entity.getSources().isBlank()
-                ? Arrays.asList(entity.getSources().split(","))
+                ? Arrays.stream(entity.getSources().split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isBlank())
+                        .toList()
                 : Collections.emptyList();
 
         return new SearchHistoryDto(
