@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.hypeflow.api.TimeseriesRequest;
 import com.hypeflow.api.TimeseriesResponse;
+import com.hypeflow.config.CacheProperties;
 import com.hypeflow.model.TimeBucket;
 import com.hypeflow.model.TimeInterval;
 import com.hypeflow.model.TimeSeries;
@@ -23,6 +24,13 @@ import static org.mockito.Mockito.*;
 
 @SuppressWarnings("unchecked")
 class TimeseriesServiceTest {
+
+    private CacheProperties createCacheProperties() {
+        CacheProperties props = new CacheProperties();
+        props.setTimeseriesTtlHours(12);
+        props.setErrorTtlMinutes(5);
+        return props;
+    }
 
     @Test
     void testQueryWithMultipleSources() {
@@ -58,7 +66,8 @@ class TimeseriesServiceTest {
                         List.of(newsClient, wikiClient),
                         repo,
                         redis,
-                        objectMapper
+                        objectMapper,
+                        createCacheProperties()
                 );
 
         TimeseriesRequest request = new TimeseriesRequest(
@@ -108,7 +117,8 @@ class TimeseriesServiceTest {
                         List.of(newsClient),
                         repo,
                         redis,
-                        objectMapper
+                        objectMapper,
+                        createCacheProperties()
                 );
 
         TimeseriesRequest request = new TimeseriesRequest(
@@ -153,7 +163,8 @@ class TimeseriesServiceTest {
                         List.of(workingClient, failingClient),
                         repo,
                         redis,
-                        objectMapper
+                        objectMapper,
+                        createCacheProperties()
                 );
 
         TimeseriesRequest request = new TimeseriesRequest(
@@ -173,7 +184,7 @@ class TimeseriesServiceTest {
         assertEquals("failing", response.errors().get(0).source());
         assertEquals("SOURCE_ERROR", response.errors().get(0).code());
 
-        verify(ops, never()).set(anyString(), any(), any(Duration.class));
+        verify(ops, times(1)).set(anyString(), any(), any(Duration.class));
     }
 
     @Test
@@ -207,7 +218,8 @@ class TimeseriesServiceTest {
                         List.of(),
                         repo,
                         redis,
-                        objectMapper
+                        objectMapper,
+                        createCacheProperties()
                 );
 
         TimeseriesRequest request = new TimeseriesRequest(
