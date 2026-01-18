@@ -2,14 +2,19 @@
     <div id="app">
         <h1>Time Series Query</h1>
 
-        <SearchForm @search="handleSearch" />
+        <!-- pass loading so SearchForm can disable the button while request runs -->
+        <SearchForm @search="handleSearch" :loading="loading" />
 
         <div v-if="loading">Loading...</div>
         <div v-if="error" style="color: red">{{ error }}</div>
 
         <div v-if="result">
             <p><strong>Total mentions:</strong> {{ result.totalMentions }}</p>
-            <TimeSeriesChart :data="result.dailyStatistics" />
+
+            <!-- pass per-source series and the aggregated total series -->
+            <TimeSeriesChart :per-source="result.perSource || []"
+                             :total-series="result.dailyStatistics || []" />
+
         </div>
     </div>
 </template>
@@ -34,7 +39,7 @@
             async handleSearch(payload) {
                 this.loading = true;
                 this.error = null;
-                this.result = null;
+                this.result = null;// keep result visible? we're clearing it to force UI update -- optional
 
                 console.log("Sending request:", payload);
 
