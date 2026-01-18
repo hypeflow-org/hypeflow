@@ -27,11 +27,21 @@
                            :value="s.id"
                            v-model="sources" />
                     {{ s.title }}
-                    <!-- simple info icon; hover shows description/limits via title attribute -->
-                    <span class="info"
-                          :title="buildTooltip(s)"
-                          style="margin-left:8px; cursor:help; font-weight:bold;"
-                          aria-hidden="true">(i)</span>
+                
+                <!-- --- -->
+                <span class="info-wrapper"
+                      @mouseenter="showTooltip(s.id)"
+                      @mouseleave="hideTooltip">
+                    <span class="info" @click="openDocs(s.docsUrl)">
+                        (i)
+                    </span>
+
+                    <div v-if="activeTooltip === s.id" class="tooltip">
+                        {{ buildTooltip(s) }}
+                    </div>
+                </span>
+                <!-- --- -->
+                
                 </label>
             </template>
 
@@ -42,7 +52,7 @@
 
         <div v-if="error" style="color: red; margin-bottom: 12px;">{{ error }}</div>
 
-        <button type="submit" :disabled="loading">Search</button>
+        <button type="submit" :disabled="loading || cooldownActive">Search</button>
     </form>
 
 
@@ -67,7 +77,9 @@
                 endDate: "",
                 sources: [],
                 error: "",
-                sourcesList: [] // fetched from backend
+                sourcesList: [], // fetched from backend
+                activeTooltip: null,
+                cooldownActive: false
             };
         },
 
@@ -79,25 +91,20 @@
             async fetchSources() {
                 try {
                     const resp = await axios.get("/api/sources");
-                    // expect an array; keep only enabled sources
+                    // keep only enabled sources
                     this.sourcesList = (resp.data || []).filter(s => s.enabled !== false);
                 } catch (err) {
-                    //console.error("Failed to load sources:", err);
-                    //// fallback to a minimal set if desired
-                    //this.sourcesList = [
-                    //    { id: "newsapi", title: "NewsAPI", description: "News articles", unit: "articles" },
-                    //    { id: "wikipedia", title: "Wikipedia", description: "Pageviews", unit: "pageviews" }
-                    //];
+                    console.error("Failed to load sources:", err);
                 }
             },
 
             buildTooltip(s) {
-                // simple human-readable tooltip
                 const parts = [];
                 if (s.description) parts.push(s.description);
                 if (s.unit) parts.push(`Unit: ${s.unit}`);
+                if (s.maxRangeDays) parts.push(`Maximum range of days: ${s.maxRangeDays}`);
                 if (s.rateLimitNote) parts.push(`Limits: ${s.rateLimitNote}`);
-                if (s.docsUrl) parts.push(`Docs: ${s.docsUrl}`);
+                if (s.docsUrl) parts.push(`Click (i) for more information`);
                 return parts.join("\n");
             },
 
@@ -108,14 +115,32 @@
                     return;
                 }
 
-                // emit selected sources (empty array means "all" per backend contract)
+                // empty array means "all sources"
                 this.$emit("search", {
                     word: this.word,
                     startDate: this.startDate,
                     endDate: this.endDate,
                     sources: this.sources
                 });
-            }
+
+                // 3-second cooldown
+                this.cooldownActive = true;
+                setTimeout(() => {
+                    this.cooldownActive = false;
+                }, 3000);
+            },  
+
+            showTooltip(id) {
+                this.activeTooltip = id;
+            },
+
+            hideTooltip() {
+                this.activeTooltip = null;
+            },
+
+            openDocs(url) {
+                if (url) window.open(url, "_blank");
+            },
         }
     };
 </script>
@@ -129,5 +154,39 @@
     }
     .info {
         color: #0077cc;
+    }
+
+    .info-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+
+    .tooltip {
+        position: absolute;
+        top: 50%;
+        left: 100%;
+        transform: translateY(-50%);
+        margin-left: 8px;
+
+        min-width: 220px;
+        max-width: 360px;
+
+        z-index: 1000;
+        padding: 6px 8px;
+        max-width: 260px;
+        background: #f3f3f3;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        white-space: pre-line;
+        font-size: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+
+    .info {
+        color: #0077cc;
+        cursor: pointer;
+        font-weight: bold;
+        margin-left: 8px;
     }
 </style>

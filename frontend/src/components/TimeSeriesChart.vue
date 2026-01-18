@@ -126,16 +126,15 @@
 
                 const { labels, datasets } = this.buildChartData();
                 this.chart.data.labels = labels;
-                // replace datasets entirely for simplicity
                 this.chart.data.datasets = datasets;
                 this.chart.update();
             },
 
             buildChartData() {
-                // Use totalSeries as the canonical X-axis (aggregated)
+                // Use totalSeries as the canonical X-axis
                 const labels = (this.totalSeries || []).map(d => d.date);
 
-                // Build per-source datasets, skipping sources with errors or missing dailyStatistics
+                // skipping sources with errors or missing dailyStatistics
                 const validSources = (this.perSource || []).filter(
                     s => !s.error && Array.isArray(s.dailyStatistics)
                 );
@@ -144,7 +143,7 @@
                     const color = this.COLORS[idx % this.COLORS.length];
                     const dataMap = s.dailyStatistics.map(d => d.mentions);
                     return {
-                        label: s.source, // you might want to use displayName from /api/sources later
+                        label: s.source, // might want to use displayName from /api/sources
                         data: dataMap,
                         borderColor: color,
                         backgroundColor: color,
@@ -155,7 +154,7 @@
                     };
                 });
 
-                // Add aggregated total line as the last dataset with distinct style
+                // Add total line
                 if (labels.length) {
                     const totalData = (this.totalSeries || []).map(d => d.mentions);
                     datasets.push({

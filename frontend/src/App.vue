@@ -15,6 +15,16 @@
             <TimeSeriesChart :per-source="result.perSource || []"
                              :total-series="result.dailyStatistics || []" />
 
+            <!-- per-source errors -->
+            <div v-if="result.errors && result.errors.length" style="margin-top:16px;">
+                <h3>Source errors</h3>
+                <ul>
+                    <li v-for="(e, idx) in result.errors" :key="idx">
+                        <strong>{{ e.source }}</strong> failed: {{ e.message }}
+                    </li>
+                </ul>
+            </div>
+            <!-- ---------------- -->
         </div>
     </div>
 </template>
@@ -39,7 +49,7 @@
             async handleSearch(payload) {
                 this.loading = true;
                 this.error = null;
-                this.result = null;// keep result visible? we're clearing it to force UI update -- optional
+                this.result = null;// clear result?
 
                 console.log("Sending request:", payload);
 
