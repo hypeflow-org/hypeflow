@@ -1,6 +1,6 @@
 <template>
     <div id="app">
-        <h1>Time Series Query</h1>
+        <h1>HypeFlow</h1>
 
         <!-- pass loading so SearchForm can disable the button while request runs -->
         <SearchForm @search="handleSearch" :loading="loading" />
@@ -16,7 +16,7 @@
                              :total-series="result.dailyStatistics || []" />
 
             <!-- per-source errors -->
-            <div v-if="result.errors && result.errors.length" style="margin-top:16px;">
+            <div v-if="result.errors && result.errors.length" ref="errorsSection" style="margin-top: 16px; color: red;">
                 <h3>Source errors</h3>
                 <ul>
                     <li v-for="(e, idx) in result.errors" :key="idx">
@@ -24,24 +24,31 @@
                     </li>
                 </ul>
             </div>
-            <!-- ---------------- -->
+
         </div>
+
+        <!-- history and popular words -->
+        <PopularWords />
+        <LastSearches :refresh-key="historyRefreshKey" />
     </div>
 </template>
 
 <script>
     import SearchForm from "./components/SearchForm.vue";
     import TimeSeriesChart from "./components/TimeSeriesChart.vue";
+    import LastSearches from "./components/LastSearches.vue";
+    import PopularWords from "./components/PopularWords.vue";
     import axios from "axios";
 
     export default {
-        components: { SearchForm, TimeSeriesChart },
+        components: { SearchForm, TimeSeriesChart, LastSearches, PopularWords },
 
         data() {
             return {
                 loading: false,
                 error: null,
-                result: null
+                result: null,
+                historyRefreshKey: 0
             };
         },
 
@@ -57,6 +64,19 @@
                     const response = await axios.post("/api/timeseries", payload);
                     console.log("Response:", response.data);
                     this.result = response.data;
+
+                    // scroll down to show errors
+                    this.$nextTick(() => {
+                        if (this.$refs.errorsSection) {
+                            this.$refs.errorsSection.scrollIntoView({
+                                behavior: "smooth",
+                                block: "end"
+                            });
+                        }
+                    });
+
+                    this.historyRefreshKey++;
+
                 } catch (err) {
                     console.error("Request failed:", err);
                     console.error("Error response:", err.response);
@@ -70,9 +90,21 @@
 </script>
 
 <style>
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background: #E6EFF3; /* side color */
+    }
+
+
     #app {
-        max-width: 600px;
-        margin: 40px auto;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 60px;
+        min-height: 100vh;
+
         font-family: Arial, sans-serif;
+        background: #ffffff;
+        box-sizing: border-box;
     }
 </style>
