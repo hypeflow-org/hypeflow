@@ -64,6 +64,7 @@ backend/application-secrets.yml
 *.iml
 *.iws
 
+.vs/
 .vscode/
 .history/
 

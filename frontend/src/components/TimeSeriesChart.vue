@@ -31,28 +31,161 @@
     export default {
         name: "TimeSeriesChart",
 
-        props: ["data"],
+        props: {
+            perSource: {
+                type: Array,
+                default: () => []
+            },
+            totalSeries: {
+                type: Array,
+                default: () => []
+            }
+        },
+
+        data() {
+            return {
+                chart: null,
+                COLORS: [
+                    "#1f77b4",
+                    "#ff7f0e",
+                    "#2ca02c",
+                    "#d62728",
+                    "#9467bd",
+                    "#8c564b",
+                    "#e377c2",
+                    "#7f7f7f",
+                    "#bcbd22",
+                    "#17becf"
+                ]
+            };
+        },
 
         mounted() {
-            const labels = this.data.map(d => d.date);
-            const values = this.data.map(d => d.mentions);
+            this.createChart();
+        },
 
-            new Chart(this.$refs.chart, {
-                type: "line",
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: "Daily Statistics",
-                            data: values
-                        }
-                    ]
+        watch: {
+            perSource: {
+                deep: true,
+                handler() {
+                    this.updateChart();
                 }
-            });
+            },
+            totalSeries: {
+                deep: true,
+                handler() {
+                    this.updateChart();
+                }
+            }
+        },
+
+        methods: {
+            createChart() {
+                const { labels, datasets } = this.buildChartData();
+
+                this.chart = new Chart(this.$refs.chart, {
+                    type: "line",
+                    data: {
+                        labels,
+                        datasets
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: "top"
+                            },
+                            tooltip: {
+                                mode: "index",
+                                intersect: false
+                            }
+                        },
+                        interaction: {
+                            mode: "nearest",
+                            axis: "x",
+                            intersect: false
+                        },
+                        scales: {
+                            x: {
+                                ticks: { autoSkip: true }
+                            },
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            },
+
+            updateChart() {
+                if (!this.chart) {
+                    this.createChart();
+                    return;
+                }
+
+                const { labels, datasets } = this.buildChartData();
+                this.chart.data.labels = labels;
+                this.chart.data.datasets = datasets;
+                this.chart.update();
+            },
+
+            buildChartData() {
+                // Use totalSeries as the canonical X-axis
+                const labels = (this.totalSeries || []).map(d => d.date);
+
+                // skipping sources with errors or missing dailyStatistics
+                const validSources = (this.perSource || []).filter(
+                    s => !s.error && Array.isArray(s.dailyStatistics)
+                );
+
+                const datasets = validSources.map((s, idx) => {
+                    const color = this.COLORS[idx % this.COLORS.length];
+                    const dataMap = s.dailyStatistics.map(d => d.mentions);
+                    return {
+                        label: s.source, // might want to use displayName from /api/sources
+                        data: dataMap,
+                        borderColor: color,
+                        backgroundColor: color,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.2,
+                        fill: false
+                    };
+                });
+
+                // Add total line
+                if (labels.length) {
+                    const totalData = (this.totalSeries || []).map(d => d.mentions);
+                    datasets.push({
+                        label: "Total",
+                        data: totalData,
+                        borderColor: "#000000",
+                        backgroundColor: "#000000",
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        tension: 0.15,
+                        borderDash: [6, 4],
+                        fill: false
+                    });
+                }
+
+                return { labels, datasets };
+            }
         },
 
         beforeUnmount() {
-            if (this.chart) this.chart.destroy();
+            if (this.chart) {
+                this.chart.destroy();
+                this.chart = null;
+            }
         }
     };
 </script>
+
+<style scoped>
+    canvas {
+        width: 100% !important;
+        height: 360px !important;
+    }
+</style>
