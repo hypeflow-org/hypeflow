@@ -192,85 +192,70 @@ Each adapter doc includes: query syntax, bucket granularity & timezone, rate lim
 
 ---
 
-## API Endpoints
 
-### Timeseries
-```
-POST   /api/timeseries              # Get mention counts for a word
-```
+## What it does right now
+- Single backend in `backend/` (Java + Spring Boot).
+- `/api/timeseries` endpoint: takes a word and date range, queries enabled sources, aggregates counts per UTC day, sums them, and returns JSON.
+- No UI bundled yet; you can hit the API directly or wire your own chart.
 
-### Search History
-```
-GET    /api/search/history/last     # Recent searches
-GET    /api/search/history/popular  # Most searched words
-```
 
-### Health
-```
-GET    /api/health                  # Service health (MySQL + Redis)
-```
+## Sources (current)
+- `wikipedia` — Wikimedia Pageviews API (per-article, daily).
+- `newsapi` — NewsAPI `/v2/everything`, limited pages → approximate, skewed to recent articles.
+- `reddit` — Code exists but **disabled by default**; requires official Reddit API access and your own credentials. Only aggregates public `/search?sort=new&type=link` results by `created_utc`, up to ~1000 newest posts per query.
+  We do not scrape. We only keep aggregated counts (date + integer), no raw content or PII.
 
-### Response Examples
+---
 
-**Timeseries Response:**
+## API: POST `/api/timeseries`
+Request:
 ```json
 {
   "word": "bitcoin",
-  "startDate": "2025-01-10",
-  "endDate": "2025-01-17",
-  "totalMentions": 12543,
-  "dailyStatistics": [
-    {"date": "2025-01-10", "mentions": 1823},
-    {"date": "2025-01-11", "mentions": 1654}
-  ],
-  "sources": ["wikipedia", "hackernews"],
-  "fromCache": false,
-  "perSource": [
-    {"source": "wikipedia", "totalMentions": 8234, "dailyStatistics": [...]},
-    {"source": "hackernews", "totalMentions": 4309, "dailyStatistics": [...]}
-  ],
-  "errors": []
+  "startDate": "2025-11-01",
+  "endDate": "2025-11-07",
+  "sources": ["wikipedia", "newsapi"]
 }
 ```
 
-**Health Response:**
+Response:
 ```json
 {
-  "status": "UP",
-  "mysql": {"status": "UP", "database": "hypeflow"},
-  "redis": {"status": "UP", "ping": "PONG"}
+  "startDate": "2025-11-01",
+  "endDate": "2025-11-07",
+  "totalMentions": 42,
+  "dailyStatistics": [
+    {"date": "2025-11-01", "mentions": 3},
+    {"date": "2025-11-02", "mentions": 0}
+  ],
+  "sources": ["wikipedia", "newsapi"],
+  "fromCache": false
 }
 ```
 
 ---
 
-## Local Development (without Docker)
-
-### Prerequisites
-- Java 17+
-- Maven
-- Node.js 18+
-- MySQL 8.0
-- Redis
-
-### Backend
+## Run locally (backend)
+From `backend/`:
 ```bash
-cd backend
-cp .env.example .env
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
-### Frontend
+Environment variables (see `backend/.env.example`, you can copy to `backend/.env`):
 ```bash
-cd frontend
-npm install
-npm run serve
+# NewsAPI
+HYPEFLOW_NEWSAPI_API_KEY=your_newsapi_key_here
+# Reddit (only if you have approved access)
+HYPEFLOW_REDDIT_CLIENT_ID=your_reddit_client_id_here
+HYPEFLOW_REDDIT_CLIENT_SECRET=your_reddit_client_secret_here
+HYPEFLOW_REDDIT_USERNAME=your_reddit_username
 ```
 
+`application.yml` maps them under `hypeflow.newsapi` and `hypeflow.reddit`. If Reddit vars are missing or you don’t have approved access, keep that source disabled.
+
+Prereqs: JDK 17+, network access to external APIs; no database needed for this MVP.
 ---
-
-## Security & Privacy
--	Only aggregated counts are stored; no PII, no raw posts/articles are persisted.
--	Secrets via environment variables; never commit keys.
--	All timestamps at rest are UTC; UI renders in the user's local time.
--	Rate limiting: 30 requests/minute per IP address.
+## Notes on limits and legality
+- NewsAPI: bounded pages; results are approximate for wide ranges. Respect their Terms and provide your own key.
+- Reddit: presence of code != permission. Use only with explicit, compliant access per Reddit policies; otherwise leave it off.
+- Wikipedia: public stats API; still be nice to their rate limits.
