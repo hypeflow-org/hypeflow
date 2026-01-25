@@ -25,11 +25,13 @@ hypeflow:
   newsapi:
     api-key: ${HYPEFLOW_NEWSAPI_API_KEY:}
     language: en
+    base-url: https://newsapi.org/v2/everything
   wikipedia:
     project: en.wikipedia.org
     access: all-access
     agent: all-agents
     user-agent: HypeFlow/1.0 (https://github.com/hypeflow-org/hypeflow/)
+    base-url: https://wikimedia.org/api/rest_v1
   reddit:
     enabled: false
     client-id: ${HYPEFLOW_REDDIT_CLIENT_ID:}
@@ -48,9 +50,3 @@ hypeflow:
   arxiv:
     enabled: true
     base-url: https://export.arxiv.org/api/query
-  cache:
-    timeseries-ttl-hours: 12
-    error-ttl-minutes: 5
-  rate-limit:
-    enabled: true
-    requests-per-minute: 30

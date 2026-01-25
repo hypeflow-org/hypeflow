@@ -80,7 +80,7 @@ class TimeseriesServiceTest {
         when(sourceRegistry.get("sourceB")).thenReturn(new SourceDescriptor(
                 "sourceB", "Source B", "Test source B", "cat", "unit", null, null, "url", 1.0, true));
         when(sourceRegistry.get("limited")).thenReturn(new SourceDescriptor(
-                "limited", "Limited", "Test limited source", "cat", "unit", 30, null, "url", 1.0, true));
+                "limited", "Limited", "Test limited source", "cat", "unit", 3, null, "url", 1.0, true));
     }
 
     @Test
@@ -115,6 +115,42 @@ class TimeseriesServiceTest {
         TimeseriesResponse resp2 = service.query(req2);
         assertTrue(resp2.fromCache());
         assertEquals(300, resp2.totalMentions());
+        assertEquals(1, clientA.callCount);
+        assertEquals(1, clientB.callCount);
+    }
+
+    @Test
+    void singleSourceThenTwoSourcesSameRange() {
+        TrackingSourceClient clientA = new TrackingSourceClient("sourceA", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 100),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 200)
+        ));
+        TrackingSourceClient clientB = new TrackingSourceClient("sourceB", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 50),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 60)
+        ));
+
+        TimeseriesDayCacheService dayCache = new TimeseriesDayCacheService(redis, cacheProperties);
+        TimeseriesService service = new TimeseriesService(
+                List.of(clientA, clientB), repo, dayCache, sourceRegistry);
+
+        TimeseriesRequest req1 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 11),
+                List.of("sourceA"));
+
+        TimeseriesResponse resp1 = service.query(req1);
+        assertFalse(resp1.fromCache());
+        assertEquals(300, resp1.totalMentions());
+        assertEquals(1, clientA.callCount);
+        assertEquals(0, clientB.callCount);
+
+        TimeseriesRequest req2 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 11),
+                List.of("sourceA", "sourceB"));
+
+        TimeseriesResponse resp2 = service.query(req2);
+        assertFalse(resp2.fromCache());
+        assertEquals(410, resp2.totalMentions());
         assertEquals(1, clientA.callCount);
         assertEquals(1, clientB.callCount);
     }
@@ -188,6 +224,95 @@ class TimeseriesServiceTest {
     }
 
     @Test
+    void fillingTheCacheWithMultipleRequests() {
+        TrackingSourceClient client = new TrackingSourceClient("sourceA", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 10),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 20),
+                new TimeBucket(LocalDate.of(2026, 1, 12), 30),
+                new TimeBucket(LocalDate.of(2026, 1, 13), 40),
+                new TimeBucket(LocalDate.of(2026, 1, 14), 50),
+                new TimeBucket(LocalDate.of(2026, 1, 15), 60)
+        ));
+
+        TimeseriesDayCacheService dayCache = new TimeseriesDayCacheService(redis, cacheProperties);
+        TimeseriesService service = new TimeseriesService(
+                List.of(client), repo, dayCache, sourceRegistry);
+
+        TimeseriesRequest req1 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 11),
+                List.of("sourceA"));
+        TimeseriesResponse resp = service.query(req1);
+        assertEquals(1, client.callCount);
+        assertFalse(resp.fromCache());
+
+
+        TimeseriesRequest req2 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 14), LocalDate.of(2026, 1, 15),
+                List.of("sourceA"));
+        resp = service.query(req2);
+        assertFalse(resp.fromCache());
+        assertEquals(2, client.callCount);
+
+        TimeseriesRequest req3 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 12), LocalDate.of(2026, 1, 13),
+                List.of("sourceA"));
+        resp = service.query(req3);
+        assertFalse(resp.fromCache());
+        assertEquals(3, client.callCount);
+
+        TimeseriesRequest req4 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 15),
+                List.of("sourceA"));
+        resp = service.query(req4);
+        assertTrue(resp.fromCache());
+        assertEquals(3, client.callCount);
+
+        assertEquals(210, resp.totalMentions());
+    }
+
+    @Test
+    void partialCacheMultipleIntervals() {
+        TrackingSourceClient client = new TrackingSourceClient("sourceA", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 10),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 20),
+                new TimeBucket(LocalDate.of(2026, 1, 12), 30),
+                new TimeBucket(LocalDate.of(2026, 1, 13), 40),
+                new TimeBucket(LocalDate.of(2026, 1, 14), 50)
+        ));
+
+        TimeseriesDayCacheService dayCache = new TimeseriesDayCacheService(redis, cacheProperties);
+        TimeseriesService service = new TimeseriesService(
+                List.of(client), repo, dayCache, sourceRegistry);
+
+        TimeseriesRequest req1 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 11), LocalDate.of(2026, 1, 11),
+                List.of("sourceA"));
+        TimeseriesResponse resp = service.query(req1);
+        assertEquals(1, client.callCount);
+        assertFalse(resp.fromCache());
+
+        TimeseriesRequest req2 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 13), LocalDate.of(2026, 1, 13),
+                List.of("sourceA"));
+        resp = service.query(req2);
+        assertEquals(2, client.callCount);
+        assertFalse(resp.fromCache());
+
+
+        TimeseriesRequest req3 = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 14),
+                List.of("sourceA"));
+        resp = service.query(req3);
+        assertFalse(resp.fromCache());
+        assertEquals(5, client.callCount);
+
+        assertEquals(LocalDate.of(2026, 1, 14), client.lastRequestedStart);
+        assertEquals(LocalDate.of(2026, 1, 14), client.lastRequestedEnd);
+
+        assertEquals(150, resp.totalMentions());
+    }
+
+    @Test
     void fromCacheTrueOnlyWhenNoExternalCalls() {
         TrackingSourceClient client = new TrackingSourceClient("sourceA", List.of(
                 new TimeBucket(LocalDate.of(2026, 1, 10), 100)
@@ -211,14 +336,20 @@ class TimeseriesServiceTest {
 
     @Test
     void rangeTooLargeShouldReturnErrorAndSkipFetch() {
-        TrackingSourceClient limitedClient = new TrackingSourceClient("limited", List.of());
+        TrackingSourceClient limitedClient = new TrackingSourceClient("limited", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 10),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 20),
+                new TimeBucket(LocalDate.of(2026, 1, 12), 30),
+                new TimeBucket(LocalDate.of(2026, 1, 13), 40),
+                new TimeBucket(LocalDate.of(2026, 1, 14), 50)
+        ));
 
         TimeseriesDayCacheService dayCache = new TimeseriesDayCacheService(redis, cacheProperties);
         TimeseriesService service = new TimeseriesService(
                 List.of(limitedClient), repo, dayCache, sourceRegistry);
 
         TimeseriesRequest req = new TimeseriesRequest("bitcoin",
-                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 14),
                 List.of("limited"));
 
         TimeseriesResponse resp = service.query(req);
@@ -226,8 +357,78 @@ class TimeseriesServiceTest {
         assertEquals(0, limitedClient.callCount);
         assertEquals(1, resp.errors().size());
         assertEquals("RANGE_TOO_LARGE", resp.errors().get(0).code());
-        assertTrue(resp.errors().get(0).message().contains("30"));
+        assertTrue(resp.errors().get(0).message().contains("3"));
         assertTrue(resp.sources().isEmpty());
+    }
+
+    @Test
+    void rangeTooLargeButWithCacheShouldWork() {
+        TrackingSourceClient limitedClient = new TrackingSourceClient("limited", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 10),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 20),
+                new TimeBucket(LocalDate.of(2026, 1, 12), 30),
+                new TimeBucket(LocalDate.of(2026, 1, 13), 40),
+                new TimeBucket(LocalDate.of(2026, 1, 14), 50)
+        ));
+
+        TimeseriesDayCacheService dayCache = new TimeseriesDayCacheService(redis, cacheProperties);
+        TimeseriesService service = new TimeseriesService(
+                List.of(limitedClient), repo, dayCache, sourceRegistry);
+
+        TimeseriesRequest req = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 12),
+                List.of("limited"));
+        TimeseriesResponse resp = service.query(req);
+        assertEquals(1, limitedClient.callCount);
+        assertEquals(0, resp.errors().size());
+
+        req = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 14),
+                List.of("limited"));
+        resp = service.query(req);
+        assertEquals(2, limitedClient.callCount);
+        assertEquals(0, resp.errors().size());
+
+        assertEquals(150, resp.totalMentions());
+    }
+
+    @Test
+    void largeRangeButWithFullCacheHit() {
+        TrackingSourceClient limitedClient = new TrackingSourceClient("limited", List.of(
+                new TimeBucket(LocalDate.of(2026, 1, 10), 10),
+                new TimeBucket(LocalDate.of(2026, 1, 11), 20),
+                new TimeBucket(LocalDate.of(2026, 1, 12), 30),
+                new TimeBucket(LocalDate.of(2026, 1, 13), 40),
+                new TimeBucket(LocalDate.of(2026, 1, 14), 50),
+                new TimeBucket(LocalDate.of(2026, 1, 14), 60)
+        ));
+
+        TimeseriesDayCacheService dayCache = new TimeseriesDayCacheService(redis, cacheProperties);
+        TimeseriesService service = new TimeseriesService(
+                List.of(limitedClient), repo, dayCache, sourceRegistry);
+
+        TimeseriesRequest req = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 12),
+                List.of("limited"));
+        TimeseriesResponse resp = service.query(req);
+        assertEquals(1, limitedClient.callCount);
+        assertEquals(0, resp.errors().size());
+
+        req = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 13), LocalDate.of(2026, 1, 15),
+                List.of("limited"));
+        resp = service.query(req);
+        assertEquals(2, limitedClient.callCount);
+        assertEquals(0, resp.errors().size());
+
+        req = new TimeseriesRequest("bitcoin",
+                LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 15),
+                List.of("limited"));
+        resp = service.query(req);
+        assertEquals(3, limitedClient.callCount);
+        assertEquals(0, resp.errors().size());
+
+        assertEquals(210, resp.totalMentions());
     }
 
     @Test
@@ -281,6 +482,7 @@ class TimeseriesServiceTest {
 
         TimeseriesResponse resp = service.query(req2);
 
+        assertTrue(resp.fromCache());
         assertEquals(30, resp.totalMentions());
         assertEquals(1, resp.perSource().size());
         assertEquals("sourceA", resp.perSource().get(0).source());
@@ -315,8 +517,9 @@ class TimeseriesServiceTest {
         TimeseriesRequest req2 = new TimeseriesRequest("bitcoin",
                 LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 10),
                 List.of("wikipedia"));
-        service.query(req2);
+        TimeseriesResponse resp = service.query(req2);
         assertEquals(2, wikiClient.callCount);
+        assertFalse(resp.fromCache());
     }
 
     @Test

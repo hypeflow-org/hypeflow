@@ -41,25 +41,27 @@ public class SourceClientConfig {
     public SourceClient newsApiSourceClient(
             OkHttpClient httpClient,
             ObjectMapper objectMapper,
+            @Value("${hypeflow.newsapi.base-url}") String baseUrl,
             @Value("${hypeflow.newsapi.api-key}") String apiKey,
             @Value("${hypeflow.newsapi.language}") String language
     ) {
         boolean apiKeyPresent = apiKey != null && !apiKey.isEmpty();
         log.info("Creating NewsApiSourceClient (apiKeyPresent={}, language={})", apiKeyPresent, language);
-        return new NewsApiSourceClient(httpClient, objectMapper, apiKey, language);
+        return new NewsApiSourceClient(httpClient, objectMapper, baseUrl, apiKey, language);
     }
 
     @Bean
     public SourceClient wikipediaSourceClient(
             OkHttpClient httpClient,
             ObjectMapper objectMapper,
+            @Value("${hypeflow.wikipedia.base-url}") String baseUrl,
             @Value("${hypeflow.wikipedia.project}") String project,
             @Value("${hypeflow.wikipedia.access}") String access,
             @Value("${hypeflow.wikipedia.agent}") String agent,
             @Value("${hypeflow.wikipedia.user-agent}") String userAgent
     ) {
         return new WikipediaSourceClient(
-                httpClient, objectMapper, project, access, agent, userAgent
+                httpClient, objectMapper, baseUrl, project, access, agent, userAgent
         );
     }
 

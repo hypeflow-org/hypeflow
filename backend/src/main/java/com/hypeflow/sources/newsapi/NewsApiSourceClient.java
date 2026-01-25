@@ -34,21 +34,23 @@ public class NewsApiSourceClient implements SourceClient {
     private static final Logger log = LoggerFactory.getLogger(NewsApiSourceClient.class);
 
     private static final String SOURCE_ID = "newsapi";
-    private static final String BASE_URL = "https://newsapi.org/v2/everything";
     private static final int PAGE_SIZE = 10;  // Maximum allowed by NewsAPI
     private static final int MAX_PAGES = 1;    // Free tier: only 1 page to save daily quota (100 requests/day)
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final String baseUrl;
     private final String apiKey;
     private final String language;
 
     public NewsApiSourceClient(OkHttpClient httpClient,
                                ObjectMapper objectMapper,
+                               String baseUrl,
                                String apiKey,
                                String language) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.apiKey = apiKey;
         this.language = language;
     }
@@ -149,7 +151,7 @@ public class NewsApiSourceClient implements SourceClient {
         String encodedTopic = URLEncoder.encode(topic, StandardCharsets.UTF_8);
         return String.format(
                 "%s?q=%s&from=%s&to=%s&language=%s&sortBy=publishedAt&pageSize=%d&page=%d",
-                BASE_URL,
+                baseUrl,
                 encodedTopic,
                 from,
                 to,

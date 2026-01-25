@@ -26,11 +26,11 @@ import java.util.Map;
 public class WikipediaSourceClient implements SourceClient {
 
     private static final String SOURCE_ID = "wikipedia";
-    private static final String BASE_URL = "https://wikimedia.org/api/rest_v1";
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final String baseUrl;
     private final String project;
     private final String access;
     private final String agent;
@@ -38,12 +38,14 @@ public class WikipediaSourceClient implements SourceClient {
 
     public WikipediaSourceClient(OkHttpClient httpClient,
                                  ObjectMapper objectMapper,
+                                 String baseUrl,
                                  String project,
                                  String access,
                                  String agent,
                                  String userAgentHeader) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.project = project;
         this.access = access;
         this.agent = agent;
@@ -72,7 +74,7 @@ public class WikipediaSourceClient implements SourceClient {
 
         String url = String.format(
                 "%s/metrics/pageviews/per-article/%s/%s/%s/%s/daily/%s/%s",
-                BASE_URL, project, access, agent, article, start, end
+                baseUrl, project, access, agent, article, start, end
         );
 
         Request request = new Request.Builder()
